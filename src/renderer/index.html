@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ghost</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main id="ticker" class="ticker" aria-label="幽灵看盘"></main>
+
+    <section id="settings" class="settings hidden" aria-label="设置">
+      <header class="settings__header drag-region">
+        <div>
+          <div class="eyebrow">GHOST TICKER</div>
+          <h1>幽灵看盘</h1>
+        </div>
+        <button id="closeSettings" class="icon-button no-drag" aria-label="关闭设置">×</button>
+      </header>
+
+      <div class="settings__content no-drag">
+        <label class="field">
+          <span>Tushare Token</span>
+          <div class="inline-control">
+            <input id="token" type="password" autocomplete="off" placeholder="仅保存在本机" />
+            <button id="testToken" class="secondary">测试</button>
+          </div>
+          <small id="tokenStatus">需要开通 Tushare 实时日线 rt_k 权限</small>
+        </label>
+
+        <div class="field">
+          <span>自选股票</span>
+          <form id="stockForm" class="inline-control">
+            <input id="stockCode" maxlength="9" placeholder="例如 600519" />
+            <button class="secondary" type="submit">添加</button>
+          </form>
+          <div id="stockList" class="stock-list"></div>
+        </div>
+
+        <div class="range-grid">
+          <label class="field">
+            <span>字号 <output id="fontSizeValue"></output></span>
+            <input id="fontSize" type="range" min="12" max="42" step="1" />
+          </label>
+          <label class="field">
+            <span>透明度 <output id="opacityValue"></output></span>
+            <input id="opacity" type="range" min="0.15" max="1" step="0.05" />
+          </label>
+        </div>
+
+        <div class="color-grid">
+          <label>上涨<input id="upColor" type="color" /></label>
+          <label>下跌<input id="downColor" type="color" /></label>
+          <label>平盘<input id="flatColor" type="color" /></label>
+        </div>
+
+        <label class="field">
+          <span>快速隐藏快捷键</span>
+          <input id="shortcut" readonly placeholder="点击后按下组合键" />
+          <small>点击输入框，然后按下希望使用的组合键</small>
+        </label>
+
+        <label class="switch-row">
+          <span><strong>鼠标穿透</strong><small>鼠标操作会穿过看盘内容，可从托盘关闭</small></span>
+          <input id="clickThrough" type="checkbox" />
+        </label>
+
+        <p id="saveStatus" class="status" role="status"></p>
+        <button id="save" class="primary">保存并返回看盘</button>
+      </div>
+    </section>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>
