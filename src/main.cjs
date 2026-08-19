@@ -98,8 +98,8 @@ function createWindow() {
 }
 
 function trayIcon() {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="10" fill="#111827"/><path d="M6 13c0-4 2-7 5-7s5 3 5 7v3l-2-1-1 1-2-1-2 1-1-1-2 1v-3z" fill="#fff"/><circle cx="9" cy="11" r="1" fill="#111827"/><circle cx="13" cy="11" r="1" fill="#111827"/></svg>`;
-  return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAABYAAAAWEAYAAACUJLB4AAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRP///////wlY99wAAAAHdElNRQfqCBMCFRguiovYAAACc0lEQVRIx2NgGGKAkVyNgoISEurqPK4QnuN8CB1qBKGdwiC05DkI/TwQQu+LgdBrn0L56e/fv3hx8+bns1R3MMSB7CchvPI8CN14gjrhVusAoXtiIB74kUq2gyEOVZoA4d34BaFZS6njUHTwazeE1vCHOPz+d6IdDHGowhkI774xbRxICCg+hTj8gQxMhAm7Q9nXQHh3vhNvOC3ATRaIezgqcDoYAoofQGhmG2KNtigzO2tsx8Aw68w0+55aBoZ3754/v3EDwYfJkwbYxKHuCYSJwJMENNd3Q3ifS4g1spOnlbUmkYEh9VHSo5hywupny82TW9LJwFD+pfp3y3xSPcBXjBbCju2khiixDoUBmHryQtzpGJqDg3YTqzUpLKEo0p6BYT3zxpxt0xkYhIQkJTU0EHwYwCUP008aCP6NliQeQv0sdxCXFljahAGYQ3CpIyRPyBxU8OQ4WghLTCbVz3M/zgjuyyefTxqQsUQPYXNoCOOswdBDhlqAuBB+wYsWwvsyqO8U4oD0Ryk1iWJCqvZqoTl4LcdAOTi7NMMniWAZtfonmoMP1FMWAuSDqd0ztsyrJKRqbwncwZA6+8stCK/6D3khQD54yv/s1oteXLJ1b6Hui8VRNffCQroVPQRmVMzuXqTEwKDLbGzvMBuRWWB8cuWxg18HIHS3A0yEQGtNMRvCuzeFdmGLDygtgzYzowk6GNXhSrYQ3q1FEJpZgTYO/P0JQqsdhDYr/dBVMBEyAqLx3mEIj3sxhK75QV2HVj+G0Lw8uBwKA5T26YQhPAdoQz8kFkI7XYPQEish9Ato+b4P2hpcC222HlCH9uneE2svABrAIucE9MfxAAAAAElFTkSuQmCC';
+  return nativeImage.createFromDataURL(`data:image/png;base64,${png}`);
 }
 
 function createTray() {
