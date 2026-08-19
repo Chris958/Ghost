@@ -21,6 +21,12 @@ function calculateChange(close, previousClose) {
   return ((current - previous) / previous) * 100;
 }
 
+function clampFontSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) return 18;
+  return Math.min(42, Math.max(4, size));
+}
+
 function rowsFromTushare(payload) {
   if (!payload || payload.code !== 0) {
     throw new Error(payload?.msg || 'Tushare 返回未知错误');
@@ -99,6 +105,7 @@ function searchResultsFromEastmoney(payload) {
 module.exports = {
   normalizeCode,
   calculateChange,
+  clampFontSize,
   rowsFromTushare,
   rowsFromSina,
   rowsFromEastmoney,

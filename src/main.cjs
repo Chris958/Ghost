@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   normalizeCode,
+  clampFontSize,
   rowsFromTushare,
   rowsFromSina,
   rowsFromEastmoney,
@@ -72,9 +73,9 @@ function createWindow() {
     height: 120,
     minWidth: 180,
     minHeight: 48,
+    title: '',
     transparent: true,
     frame: false,
-    titleBarStyle: 'hidden',
     thickFrame: false,
     roundedCorners: false,
     backgroundMaterial: 'none',
@@ -119,8 +120,8 @@ function createSettingsWindow() {
   settingsWindow = new BrowserWindow({
     width: 458,
     height: 700,
+    title: '',
     frame: false,
-    titleBarStyle: 'hidden',
     roundedCorners: true,
     resizable: false,
     minimizable: false,
@@ -197,7 +198,7 @@ function registerShortcut(shortcut) {
 function updateConfig(patch) {
   const next = { ...config, ...patch };
   if (patch.stocks) next.stocks = [...new Set(patch.stocks.map(normalizeCode))].slice(0, 50);
-  next.fontSize = Math.min(42, Math.max(12, Number(next.fontSize) || 18));
+  next.fontSize = clampFontSize(next.fontSize);
   next.opacity = Math.min(1, Math.max(0.15, Number(next.opacity) || 0.78));
   next.dataSource = next.dataSource === 'rt_k' ? 'rt_k' : 'realtime_quote';
 

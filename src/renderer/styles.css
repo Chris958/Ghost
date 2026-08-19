@@ -5,7 +5,8 @@
   --up: #ff4d5e;
   --down: #28c76f;
   --flat: #c7ced9;
-  font-family: Inter, "SF Pro Display", "Segoe UI Variable", "Microsoft YaHei UI", sans-serif;
+  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  font-synthesis: none;
 }
 
 * { box-sizing: border-box; }
@@ -32,7 +33,7 @@ button { cursor: pointer; }
   align-items: baseline;
   gap: 14px;
   font-size: var(--font-size);
-  font-weight: 650;
+  font-weight: 300;
   line-height: 1.35;
   letter-spacing: .01em;
   white-space: nowrap;

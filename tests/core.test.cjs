@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   normalizeCode,
   calculateChange,
+  clampFontSize,
   rowsFromTushare,
   rowsFromSina,
   rowsFromEastmoney,
@@ -25,6 +26,13 @@ test('calculates percentage change', () => {
   assert.equal(calculateChange(11, 10), 10);
   assert.equal(calculateChange(9, 10), -10);
   assert.equal(calculateChange(10, 0), null);
+});
+
+test('allows discreet font sizes down to 4px', () => {
+  assert.equal(clampFontSize(4), 4);
+  assert.equal(clampFontSize(2), 4);
+  assert.equal(clampFontSize(99), 42);
+  assert.equal(clampFontSize('invalid'), 18);
 });
 
 test('maps Tushare response fields safely', () => {
