@@ -22,6 +22,7 @@ let pollTimer;
 let config;
 let lastQuotes = [];
 let lastError = '';
+let pollInFlight = false;
 
 function configPath() {
   return path.join(app.getPath('userData'), 'ghost-config.json');
@@ -194,10 +195,14 @@ async function tushareRequest(apiName, params, fields) {
 
 async function pollQuotes(force = false) {
   if (!config.token || !config.stocks.length) {
+    lastQuotes = [];
+    lastError = '';
     sendState();
     return;
   }
   if (!force && !isLikelyTradingSession()) return;
+  if (pollInFlight) return;
+  pollInFlight = true;
   try {
     const payload = await tushareRequest(
       'rt_k',
@@ -210,6 +215,8 @@ async function pollQuotes(force = false) {
     lastError = '';
   } catch (error) {
     lastError = error.name === 'AbortError' ? 'Tushare 请求超时' : error.message;
+  } finally {
+    pollInFlight = false;
   }
   sendState();
 }
