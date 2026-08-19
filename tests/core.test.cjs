@@ -1,6 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeCode, calculateChange, rowsFromTushare, rowsFromSina } = require('../src/core.cjs');
+const {
+  normalizeCode,
+  calculateChange,
+  rowsFromTushare,
+  rowsFromSina,
+  rowsFromEastmoney,
+  searchResultsFromEastmoney
+} = require('../src/core.cjs');
 
 test('normalizes common A-share codes', () => {
   assert.equal(normalizeCode('600519'), '600519.SH');
@@ -42,4 +49,31 @@ test('maps Tushare realtime_quote Sina snapshot', () => {
   assert.equal(rows[0].price, 1292.55);
   assert.equal(rows[0].previousClose, 1297.99);
   assert.ok(rows[0].change < 0);
+});
+
+test('maps Eastmoney fallback snapshot and preserves configured market', () => {
+  const rows = rowsFromEastmoney({
+    data: { diff: [{ f12: '600519', f14: '贵州茅台', f2: 1530, f18: 1500, f124: 1787050800 }] }
+  }, ['600519.SH']);
+  assert.equal(rows[0].code, '600519.SH');
+  assert.equal(rows[0].name, '贵州茅台');
+  assert.equal(rows[0].change, 2);
+  assert.equal(rows[0].price, 1530);
+});
+
+test('maps and deduplicates fuzzy stock search results', () => {
+  const payload = {
+    QuotationCodeTable: {
+      Data: [
+        { Code: '600519', Name: '贵州茅台', PinYin: 'GZMT', Classify: 'AStock', SecurityTypeName: '沪A' },
+        { Code: '600519', Name: '贵州茅台', PinYin: 'GZMT', Classify: 'AStock', SecurityTypeName: '沪A' },
+        { Code: '000001', Name: '平安银行', PinYin: 'PAYH', Classify: 'AStock', SecurityTypeName: '深A' },
+        { Code: '00700', Name: '腾讯控股', PinYin: 'TXKG', Classify: 'HKStock', SecurityTypeName: '港股' }
+      ]
+    }
+  };
+  assert.deepEqual(searchResultsFromEastmoney(payload), [
+    { code: '600519.SH', name: '贵州茅台', pinyin: 'GZMT' },
+    { code: '000001.SZ', name: '平安银行', pinyin: 'PAYH' }
+  ]);
 });

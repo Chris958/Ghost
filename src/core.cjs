@@ -62,4 +62,45 @@ function rowsFromSina(text) {
   return rows;
 }
 
-module.exports = { normalizeCode, calculateChange, rowsFromTushare, rowsFromSina };
+function rowsFromEastmoney(payload, stocks) {
+  const suffixByCode = new Map(stocks.map((code) => [code.slice(0, 6), code.slice(7)]));
+  return (payload?.data?.diff || []).flatMap((item) => {
+    const digits = String(item.f12 || '').padStart(6, '0');
+    const suffix = suffixByCode.get(digits);
+    if (!suffix) return [];
+    const price = Number(item.f2);
+    const previousClose = Number(item.f18);
+    if (!Number.isFinite(price) || !Number.isFinite(previousClose)) return [];
+    return [{
+      code: `${digits}.${suffix}`,
+      name: item.f14 || digits,
+      change: calculateChange(price, previousClose),
+      price,
+      previousClose,
+      tradeTime: item.f124 ? new Date(Number(item.f124) * 1000).toISOString() : ''
+    }];
+  });
+}
+
+function searchResultsFromEastmoney(payload) {
+  const seen = new Set();
+  return (payload?.QuotationCodeTable?.Data || []).flatMap((item) => {
+    const digits = String(item.Code || '');
+    if (item.Classify !== 'AStock' || !/^\d{6}$/.test(digits)) return [];
+    const type = String(item.SecurityTypeName || '');
+    const suffix = type.includes('沪') ? 'SH' : type.includes('北') ? 'BJ' : 'SZ';
+    const code = `${digits}.${suffix}`;
+    if (seen.has(code)) return [];
+    seen.add(code);
+    return [{ code, name: item.Name || digits, pinyin: item.PinYin || '' }];
+  });
+}
+
+module.exports = {
+  normalizeCode,
+  calculateChange,
+  rowsFromTushare,
+  rowsFromSina,
+  rowsFromEastmoney,
+  searchResultsFromEastmoney
+};

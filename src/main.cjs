@@ -1,7 +1,13 @@
 const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const { normalizeCode, rowsFromTushare, rowsFromSina } = require('./core.cjs');
+const {
+  normalizeCode,
+  rowsFromTushare,
+  rowsFromSina,
+  rowsFromEastmoney,
+  searchResultsFromEastmoney
+} = require('./core.cjs');
 
 const DEFAULT_CONFIG = {
   token: '',
@@ -18,13 +24,15 @@ const DEFAULT_CONFIG = {
 };
 
 let mainWindow;
+let settingsWindow;
 let tray;
 let pollTimer;
 let config;
 let lastQuotes = [];
 let lastError = '';
 let pollInFlight = false;
-let permissionCache = { token: '', validUntil: 0 };
+let forcePollPending = false;
+let configRevision = 0;
 
 function configPath() {
   return path.join(app.getPath('userData'), 'ghost-config.json');
@@ -66,24 +74,31 @@ function createWindow() {
     minHeight: 48,
     transparent: true,
     frame: false,
+    titleBarStyle: 'hidden',
+    thickFrame: false,
+    roundedCorners: false,
+    backgroundMaterial: 'none',
     alwaysOnTop: true,
     skipTaskbar: true,
     hasShadow: false,
     resizable: false,
     show: false,
     backgroundColor: '#00000000',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      backgroundThrottling: false
     }
   });
 
+  mainWindow.setBackgroundColor('#00000000');
   mainWindow.setAlwaysOnTop(true, 'floating');
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   mainWindow.setIgnoreMouseEvents(Boolean(config.clickThrough), { forward: true });
-  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'), { query: { mode: 'ticker' } });
   mainWindow.once('ready-to-show', () => mainWindow.showInactive());
   mainWindow.on('moved', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -97,6 +112,40 @@ function createWindow() {
       mainWindow.hide();
     }
   });
+}
+
+function createSettingsWindow() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) return settingsWindow;
+  settingsWindow = new BrowserWindow({
+    width: 458,
+    height: 700,
+    frame: false,
+    titleBarStyle: 'hidden',
+    roundedCorners: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    show: false,
+    backgroundColor: '#11141b',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+  settingsWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'), { query: { mode: 'settings' } });
+  settingsWindow.on('closed', () => { settingsWindow = undefined; });
+  settingsWindow.webContents.on('did-finish-load', () => {
+    settingsWindow?.webContents.send('ghost:config', publicConfig());
+    settingsWindow?.webContents.send('ghost:quotes', {
+      quotes: lastQuotes,
+      error: lastError,
+      updatedAt: Date.now()
+    });
+  });
+  return settingsWindow;
 }
 
 function trayIcon() {
@@ -134,17 +183,9 @@ function toggleVisibility() {
 }
 
 function openSettings() {
-  if (!mainWindow) return;
-  if (config.clickThrough) {
-    config.clickThrough = false;
-    mainWindow.setIgnoreMouseEvents(false);
-    saveConfig();
-  }
-  mainWindow.show();
-  mainWindow.focus();
-  mainWindow.webContents.send('ghost:config', publicConfig());
-  mainWindow.webContents.send('ghost:settings-open');
-  rebuildTrayMenu();
+  const window = createSettingsWindow();
+  window.show();
+  window.focus();
 }
 
 function registerShortcut(shortcut) {
@@ -165,11 +206,12 @@ function updateConfig(patch) {
     throw new Error('快捷键已被其他应用占用，请换一个组合');
   }
 
-  if (next.token !== config.token) permissionCache = { token: '', validUntil: 0 };
   config = next;
+  configRevision += 1;
   saveConfig();
   mainWindow?.setIgnoreMouseEvents(Boolean(config.clickThrough), { forward: true });
   mainWindow?.webContents.send('ghost:config', publicConfig());
+  settingsWindow?.webContents.send('ghost:config', publicConfig());
   rebuildTrayMenu();
   pollQuotes(true);
   return publicConfig();
@@ -197,35 +239,7 @@ async function tushareRequest(apiName, params, fields) {
   }
 }
 
-async function verifyRealtimeQuoteAccess() {
-  if (!config.token) throw new Error('请先在设置中填写 Tushare Token');
-  if (permissionCache.token === config.token && permissionCache.validUntil > Date.now()) return;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  try {
-    const response = await fetch('https://api.tushare.pro/dataapi/sdk-event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        user_token: config.token,
-        event_name: 'realtime_quote',
-        event_detail: '个股实时交易数据'
-      }),
-      signal: controller.signal
-    });
-    if (!response.ok) throw new Error(`Tushare 权限验证失败（HTTP ${response.status}）`);
-    const payload = await response.json();
-    if (payload.message !== 'success') {
-      throw new Error(payload.msg || payload.message || '当前 Token 无 realtime_quote 权限');
-    }
-    permissionCache = { token: config.token, validUntil: Date.now() + 30 * 60 * 1000 };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 async function tushareRealtimeQuotes() {
-  await verifyRealtimeQuoteAccess();
   const symbols = config.stocks.map((code) => {
     const [digits, market] = code.split('.');
     return `${market.toLowerCase()}${digits}`;
@@ -243,23 +257,60 @@ async function tushareRealtimeQuotes() {
     if (!response.ok) throw new Error(`实时快照源 HTTP ${response.status}`);
     const text = new TextDecoder('gbk').decode(await response.arrayBuffer());
     const rows = rowsFromSina(text);
-    if (!rows.length) throw new Error('实时快照源未返回有效行情');
-    return rows;
+    if (!rows.length) throw new Error('新浪实时快照未返回有效行情');
+    if (rows.length === config.stocks.length) return rows;
+    const fallback = await eastmoneyRealtimeQuotes();
+    const merged = new Map([...fallback, ...rows].map((row) => [row.code, row]));
+    return config.stocks.map((code) => merged.get(code)).filter(Boolean);
   } finally {
     clearTimeout(timeout);
   }
 }
 
+async function eastmoneyRealtimeQuotes() {
+  const secids = config.stocks.map((code) => {
+    const [digits, market] = code.split('.');
+    return `${market === 'SH' ? '1' : '0'}.${digits}`;
+  });
+  const url = new URL('https://push2.eastmoney.com/api/qt/ulist.np/get');
+  url.search = new URLSearchParams({
+    fltt: '2', invt: '2', fields: 'f12,f14,f2,f18,f124', secids: secids.join(',')
+  });
+  const response = await fetch(url, {
+    headers: { Referer: 'https://quote.eastmoney.com/' }, signal: AbortSignal.timeout(8000)
+  });
+  if (!response.ok) throw new Error(`备用实时源 HTTP ${response.status}`);
+  const rows = rowsFromEastmoney(await response.json(), config.stocks);
+  if (!rows.length) throw new Error('备用实时源未返回有效行情');
+  return rows;
+}
+
+async function freeRealtimeQuotes() {
+  try {
+    return await tushareRealtimeQuotes();
+  } catch (primaryError) {
+    try {
+      return await eastmoneyRealtimeQuotes();
+    } catch (fallbackError) {
+      throw new Error(`实时行情不可用：${primaryError.message}；${fallbackError.message}`);
+    }
+  }
+}
+
 async function pollQuotes(force = false) {
-  if (!config.token || !config.stocks.length) {
+  if (!config.stocks.length || (config.dataSource === 'rt_k' && !config.token)) {
     lastQuotes = [];
-    lastError = '';
+    lastError = !config.stocks.length ? '请先添加自选股票' : 'rt_k 模式需要 Tushare Token';
     sendState();
     return;
   }
   if (!force && !isLikelyTradingSession()) return;
-  if (pollInFlight) return;
+  if (pollInFlight) {
+    if (force) forcePollPending = true;
+    return;
+  }
   pollInFlight = true;
+  const revision = configRevision;
   try {
     const fresh = config.dataSource === 'rt_k'
       ? rowsFromTushare(await tushareRequest(
@@ -267,16 +318,31 @@ async function pollQuotes(force = false) {
         { ts_code: config.stocks.join(',') },
         'ts_code,name,pre_close,close,trade_time'
       ))
-      : await tushareRealtimeQuotes();
-    const byCode = new Map(fresh.map((quote) => [quote.code, quote]));
-    lastQuotes = config.stocks.map((code) => byCode.get(code)).filter(Boolean);
-    lastError = '';
+      : await freeRealtimeQuotes();
+    if (revision === configRevision) {
+      const byCode = new Map(fresh.map((quote) => [quote.code, quote]));
+      lastQuotes = config.stocks.map((code) => byCode.get(code)).filter(Boolean);
+      if (!lastQuotes.length) throw new Error('未获取到自选股票行情，请检查股票代码');
+      lastError = lastQuotes.length < config.stocks.length
+        ? `部分股票暂无行情（${lastQuotes.length}/${config.stocks.length}）`
+        : '';
+    } else {
+      forcePollPending = true;
+    }
   } catch (error) {
-    lastError = error.name === 'AbortError' ? 'Tushare 请求超时' : error.message;
+    if (revision === configRevision) {
+      lastError = ['AbortError', 'TimeoutError'].includes(error.name)
+        ? '行情请求超时，请稍后重试'
+        : error.message;
+    }
   } finally {
     pollInFlight = false;
   }
-  sendState();
+  if (revision === configRevision) sendState();
+  if (forcePollPending) {
+    forcePollPending = false;
+    setImmediate(() => pollQuotes(true));
+  }
 }
 
 function isLikelyTradingSession(now = new Date()) {
@@ -290,7 +356,26 @@ function isLikelyTradingSession(now = new Date()) {
 }
 
 function sendState() {
-  mainWindow?.webContents.send('ghost:quotes', { quotes: lastQuotes, error: lastError });
+  const state = { quotes: lastQuotes, error: lastError, updatedAt: Date.now() };
+  mainWindow?.webContents.send('ghost:quotes', state);
+  settingsWindow?.webContents.send('ghost:quotes', state);
+}
+
+async function searchStocks(query) {
+  const input = String(query || '').trim();
+  if (!input) return [];
+  const url = new URL('https://searchapi.eastmoney.com/api/suggest/get');
+  url.search = new URLSearchParams({
+    input,
+    type: '14',
+    token: 'D43BF722C8E33BDC906FB84D85E326E8',
+    count: '12'
+  });
+  const response = await fetch(url, {
+    headers: { Referer: 'https://quote.eastmoney.com/' }, signal: AbortSignal.timeout(8000)
+  });
+  if (!response.ok) throw new Error(`股票搜索 HTTP ${response.status}`);
+  return searchResultsFromEastmoney(await response.json());
 }
 
 function setupIpc() {
@@ -308,7 +393,7 @@ function setupIpc() {
       const code = config.stocks[0] || '000001.SZ';
       const rows = config.dataSource === 'rt_k'
         ? rowsFromTushare(await tushareRequest('rt_k', { ts_code: code }, 'ts_code,name,pre_close,close,trade_time'))
-        : await tushareRealtimeQuotes();
+        : await freeRealtimeQuotes();
       if (!rows.length) throw new Error('接口成功，但未返回行情数据');
       const mode = config.dataSource === 'rt_k' ? 'rt_k' : 'realtime_quote';
       return { ok: true, message: `${mode} 连接成功：${rows[0].name}` };
@@ -319,10 +404,12 @@ function setupIpc() {
       config.dataSource = oldDataSource;
     }
   });
+  ipcMain.handle('ghost:search-stocks', (_event, query) => searchStocks(query));
   ipcMain.handle('ghost:hide', () => mainWindow?.hide());
+  ipcMain.handle('ghost:close-settings', () => settingsWindow?.close());
   ipcMain.handle('ghost:refresh', () => pollQuotes(true));
-  ipcMain.handle('ghost:resize', (_event, { width, height }) => {
-    if (!mainWindow) return;
+  ipcMain.handle('ghost:resize', (event, { width, height }) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return;
     mainWindow.setSize(
       Math.min(520, Math.max(180, Math.round(width))),
       Math.min(720, Math.max(48, Math.round(height)))

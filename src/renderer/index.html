@@ -21,30 +21,38 @@
 
       <div class="settings__content no-drag">
         <label class="field">
-          <span>Tushare Token</span>
+          <span>Tushare Token（仅 rt_k 需要）</span>
           <div class="inline-control">
             <input id="token" type="password" autocomplete="off" placeholder="仅保存在本机" />
             <button id="testToken" class="secondary">测试</button>
           </div>
-          <small id="tokenStatus">默认使用 realtime_quote，无需购买 rt_k 权限</small>
+          <small id="tokenStatus">免费实时模式无需 Token</small>
         </label>
 
         <label class="field">
           <span>行情数据模式</span>
           <select id="dataSource">
-            <option value="realtime_quote">realtime_quote · 标准 Token（推荐）</option>
+            <option value="realtime_quote">免费实时 · 自动双源（推荐）</option>
             <option value="rt_k">rt_k · 付费实时日线</option>
           </select>
-          <small>realtime_quote 对应 Tushare SDK 的实时快照模式</small>
+          <small>主源兼容 Tushare realtime_quote，异常时自动切换备用源</small>
         </label>
 
         <div class="field">
           <span>自选股票</span>
-          <form id="stockForm" class="inline-control">
-            <input id="stockCode" maxlength="9" placeholder="例如 600519" />
-            <button class="secondary" type="submit">添加</button>
-          </form>
+          <div class="stock-search">
+            <form id="stockForm" class="inline-control">
+              <input id="stockCode" maxlength="40" autocomplete="off" placeholder="代码、名称或拼音首字母" />
+              <button class="secondary" type="submit">添加</button>
+            </form>
+            <div id="stockSuggestions" class="suggestions hidden"></div>
+          </div>
           <div id="stockList" class="stock-list"></div>
+        </div>
+
+        <div class="data-health">
+          <span class="data-health__dot"></span>
+          <small id="dataStatus">等待首次行情更新</small>
         </div>
 
         <div class="range-grid">
