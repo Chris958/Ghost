@@ -1,10 +1,11 @@
 const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const { normalizeCode, rowsFromTushare } = require('./core.cjs');
+const { normalizeCode, rowsFromTushare, rowsFromSina } = require('./core.cjs');
 
 const DEFAULT_CONFIG = {
   token: '',
+  dataSource: 'realtime_quote',
   stocks: ['000001.SZ', '600519.SH'],
   fontSize: 18,
   opacity: 0.78,
@@ -23,6 +24,7 @@ let config;
 let lastQuotes = [];
 let lastError = '';
 let pollInFlight = false;
+let permissionCache = { token: '', validUntil: 0 };
 
 function configPath() {
   return path.join(app.getPath('userData'), 'ghost-config.json');
@@ -156,12 +158,14 @@ function updateConfig(patch) {
   if (patch.stocks) next.stocks = [...new Set(patch.stocks.map(normalizeCode))].slice(0, 50);
   next.fontSize = Math.min(42, Math.max(12, Number(next.fontSize) || 18));
   next.opacity = Math.min(1, Math.max(0.15, Number(next.opacity) || 0.78));
+  next.dataSource = next.dataSource === 'rt_k' ? 'rt_k' : 'realtime_quote';
 
   if (patch.shortcut && patch.shortcut !== config.shortcut && !registerShortcut(patch.shortcut)) {
     registerShortcut(config.shortcut);
     throw new Error('快捷键已被其他应用占用，请换一个组合');
   }
 
+  if (next.token !== config.token) permissionCache = { token: '', validUntil: 0 };
   config = next;
   saveConfig();
   mainWindow?.setIgnoreMouseEvents(Boolean(config.clickThrough), { forward: true });
@@ -193,6 +197,59 @@ async function tushareRequest(apiName, params, fields) {
   }
 }
 
+async function verifyRealtimeQuoteAccess() {
+  if (!config.token) throw new Error('请先在设置中填写 Tushare Token');
+  if (permissionCache.token === config.token && permissionCache.validUntil > Date.now()) return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch('https://api.tushare.pro/dataapi/sdk-event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        user_token: config.token,
+        event_name: 'realtime_quote',
+        event_detail: '个股实时交易数据'
+      }),
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(`Tushare 权限验证失败（HTTP ${response.status}）`);
+    const payload = await response.json();
+    if (payload.message !== 'success') {
+      throw new Error(payload.msg || payload.message || '当前 Token 无 realtime_quote 权限');
+    }
+    permissionCache = { token: config.token, validUntil: Date.now() + 30 * 60 * 1000 };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function tushareRealtimeQuotes() {
+  await verifyRealtimeQuoteAccess();
+  const symbols = config.stocks.map((code) => {
+    const [digits, market] = code.split('.');
+    return `${market.toLowerCase()}${digits}`;
+  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(`https://hq.sinajs.cn/rn=${Date.now()}&list=${symbols.join(',')}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/119 Safari/537.36',
+        Referer: 'https://finance.sina.com.cn/'
+      },
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(`实时快照源 HTTP ${response.status}`);
+    const text = new TextDecoder('gbk').decode(await response.arrayBuffer());
+    const rows = rowsFromSina(text);
+    if (!rows.length) throw new Error('实时快照源未返回有效行情');
+    return rows;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function pollQuotes(force = false) {
   if (!config.token || !config.stocks.length) {
     lastQuotes = [];
@@ -204,12 +261,13 @@ async function pollQuotes(force = false) {
   if (pollInFlight) return;
   pollInFlight = true;
   try {
-    const payload = await tushareRequest(
-      'rt_k',
-      { ts_code: config.stocks.join(',') },
-      'ts_code,name,pre_close,close,trade_time'
-    );
-    const fresh = rowsFromTushare(payload);
+    const fresh = config.dataSource === 'rt_k'
+      ? rowsFromTushare(await tushareRequest(
+        'rt_k',
+        { ts_code: config.stocks.join(',') },
+        'ts_code,name,pre_close,close,trade_time'
+      ))
+      : await tushareRealtimeQuotes();
     const byCode = new Map(fresh.map((quote) => [quote.code, quote]));
     lastQuotes = config.stocks.map((code) => byCode.get(code)).filter(Boolean);
     lastError = '';
@@ -241,19 +299,24 @@ function setupIpc() {
     if (patch.token === '••••••••') delete patch.token;
     return updateConfig(patch);
   });
-  ipcMain.handle('ghost:test-token', async (_event, token) => {
+  ipcMain.handle('ghost:test-token', async (_event, options = {}) => {
     const oldToken = config.token;
-    if (token && token !== '••••••••') config.token = token.trim();
+    const oldDataSource = config.dataSource;
+    if (options.token && options.token !== '••••••••') config.token = options.token.trim();
+    config.dataSource = options.dataSource === 'rt_k' ? 'rt_k' : 'realtime_quote';
     try {
       const code = config.stocks[0] || '000001.SZ';
-      const payload = await tushareRequest('rt_k', { ts_code: code }, 'ts_code,name,pre_close,close,trade_time');
-      const rows = rowsFromTushare(payload);
+      const rows = config.dataSource === 'rt_k'
+        ? rowsFromTushare(await tushareRequest('rt_k', { ts_code: code }, 'ts_code,name,pre_close,close,trade_time'))
+        : await tushareRealtimeQuotes();
       if (!rows.length) throw new Error('接口成功，但未返回行情数据');
-      return { ok: true, message: `连接成功：${rows[0].name}` };
+      const mode = config.dataSource === 'rt_k' ? 'rt_k' : 'realtime_quote';
+      return { ok: true, message: `${mode} 连接成功：${rows[0].name}` };
     } catch (error) {
       return { ok: false, message: error.message };
     } finally {
       config.token = oldToken;
+      config.dataSource = oldDataSource;
     }
   });
   ipcMain.handle('ghost:hide', () => mainWindow?.hide());
@@ -262,7 +325,7 @@ function setupIpc() {
     if (!mainWindow) return;
     mainWindow.setSize(
       Math.min(520, Math.max(180, Math.round(width))),
-      Math.min(700, Math.max(48, Math.round(height)))
+      Math.min(720, Math.max(48, Math.round(height)))
     );
   });
 }

@@ -1,7 +1,7 @@
 const ticker = document.querySelector('#ticker');
 const settings = document.querySelector('#settings');
 const controls = Object.fromEntries([
-  'token', 'testToken', 'tokenStatus', 'stockForm', 'stockCode', 'stockList',
+  'token', 'testToken', 'tokenStatus', 'dataSource', 'stockForm', 'stockCode', 'stockList',
   'fontSize', 'fontSizeValue', 'opacity', 'opacityValue', 'upColor', 'downColor',
   'flatColor', 'shortcut', 'clickThrough', 'saveStatus', 'save', 'closeSettings'
 ].map((id) => [id, document.querySelector(`#${id}`)]));
@@ -69,6 +69,7 @@ function renderStockList() {
 
 function populateSettings() {
   controls.token.value = config.token || '';
+  controls.dataSource.value = config.dataSource || 'realtime_quote';
   controls.fontSize.value = config.fontSize;
   controls.opacity.value = config.opacity;
   controls.upColor.value = config.upColor;
@@ -98,7 +99,7 @@ function openSettings() {
   ticker.classList.add('hidden');
   settings.classList.remove('hidden');
   populateSettings();
-  window.ghost.resize({ width: 458, height: 666 });
+  window.ghost.resize({ width: 458, height: 700 });
 }
 
 function closeSettings() {
@@ -150,7 +151,10 @@ controls.shortcut.addEventListener('keydown', (event) => {
 controls.testToken.addEventListener('click', async () => {
   controls.testToken.disabled = true;
   controls.tokenStatus.textContent = '正在连接…';
-  const result = await window.ghost.testToken(controls.token.value);
+  const result = await window.ghost.testToken({
+    token: controls.token.value,
+    dataSource: controls.dataSource.value
+  });
   controls.testToken.disabled = false;
   controls.tokenStatus.textContent = result.message;
   controls.tokenStatus.style.color = result.ok ? '#54d68a' : '#ff8c99';
@@ -163,6 +167,7 @@ controls.save.addEventListener('click', async () => {
   try {
     config = await window.ghost.saveConfig({
       token: controls.token.value,
+      dataSource: controls.dataSource.value,
       stocks: config.stocks,
       fontSize: Number(controls.fontSize.value),
       opacity: Number(controls.opacity.value),

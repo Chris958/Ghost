@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeCode, calculateChange, rowsFromTushare } = require('../src/core.cjs');
+const { normalizeCode, calculateChange, rowsFromTushare, rowsFromSina } = require('../src/core.cjs');
 
 test('normalizes common A-share codes', () => {
   assert.equal(normalizeCode('600519'), '600519.SH');
@@ -32,4 +32,14 @@ test('maps Tushare response fields safely', () => {
   assert.deepEqual(rows[0], {
     code: '600519.SH', name: '贵州茅台', change: 2, price: 1530, previousClose: 1500, tradeTime: '10:00:00'
   });
+});
+
+test('maps Tushare realtime_quote Sina snapshot', () => {
+  const text = 'var hq_str_sh600519="贵州茅台,1300.000,1297.990,1292.550,1308.880,1290.500,0,0,100,1000,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2026-08-19,10:53:52,00,";';
+  const rows = rowsFromSina(text);
+  assert.equal(rows[0].code, '600519.SH');
+  assert.equal(rows[0].name, '贵州茅台');
+  assert.equal(rows[0].price, 1292.55);
+  assert.equal(rows[0].previousClose, 1297.99);
+  assert.ok(rows[0].change < 0);
 });

@@ -6,7 +6,8 @@ Ghost 是一款极简、透明、无边框的 A 股桌面看盘工具。悬浮�
 
 - 透明、无边框、始终置顶，不显示任务栏窗口
 - 自选股新增、删除，支持沪深京 6 位代码自动识别
-- Tushare `rt_k` 批量行情，盘中每 5 秒刷新一次
+- 默认使用 Tushare SDK `realtime_quote` 实时快照，盘中每 5 秒刷新一次
+- 可选切换到付费 `rt_k` 实时日线接口
 - 上涨、下跌、平盘颜色独立设置
 - 字号和透明度可调
 - 全局快速隐藏快捷键可自定义，默认 `Ctrl/Cmd + Shift + G`
@@ -22,14 +23,14 @@ Ghost 是一款极简、透明、无边框的 A 股桌面看盘工具。悬浮�
 - macOS：`Ghost-macOS`，解压后打开 `.dmg`
 - Linux：`Ghost-Linux`，解压后运行 `.AppImage`
 
-首次运行后，从系统托盘 Ghost 图标打开“设置”，填写 Tushare Token，并点击“测试”。
+首次运行后，从系统托盘 Ghost 图标打开“设置”，填写 Tushare Token，保持推荐的 `realtime_quote` 模式并点击“测试”。
 
-> Tushare 的 `rt_k` 是单独授权的“实时日线”接口。按 2026 年 8 月官方说明，该权限不是积分接口；个人权限需单独开通，频率为每分钟 50 次。Ghost 将全部自选股合并成一次请求，5 秒刷新即每分钟 12 次。请以 [Tushare 实时日线文档](https://tushare.pro/document/2?doc_id=372) 和 [最新权限表](https://tushare.pro/document/1?doc_id=290) 为准。
+> 默认的 `realtime_quote` 对应 Tushare Python SDK 1.4.29 的实时快照模式：使用 Tushare Token 验证 SDK 权限，并从其默认新浪实时源批量读取快照，不需要购买 `rt_k` 权限。`rt_k` 仍是单独授权的付费“实时日线”接口。请以 [Tushare 实时日线文档](https://tushare.pro/document/2?doc_id=372)、[最新权限表](https://tushare.pro/document/1?doc_id=290) 和 [Tushare PyPI 最新版本](https://pypi.org/project/tushare/) 为准。
 
 ## 使用
 
 1. 托盘菜单选择“设置”。
-2. 输入 Token 并测试连接。
+2. 输入 Token，选择 `realtime_quote` 并测试连接；已经购买实时日线权限时也可选择 `rt_k`。
 3. 输入 `600519`、`000001.SZ` 等代码添加自选股。
 4. 调整颜色、字号、透明度和快捷键。
 5. 保存后只保留“股票名称 + 涨跌幅”。拖动文字区域可移动位置。
@@ -55,7 +56,7 @@ npm run dist:win
 
 ## 数据说明
 
-涨跌幅由 Tushare `rt_k` 返回的最新价 `close` 与昨收价 `pre_close` 计算：
+涨跌幅由实时快照的最新价与昨收价计算：
 
 `涨跌幅 = (最新价 - 昨收价) / 昨收价 × 100%`
 

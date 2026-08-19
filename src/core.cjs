@@ -39,4 +39,27 @@ function rowsFromTushare(payload) {
   });
 }
 
-module.exports = { normalizeCode, calculateChange, rowsFromTushare };
+function rowsFromSina(text) {
+  const rows = [];
+  const pattern = /var hq_str_(sh|sz|bj)(\d+)="([^"]*)";/gi;
+  for (const match of String(text || '').matchAll(pattern)) {
+    const market = match[1].toUpperCase();
+    const code = match[2];
+    const fields = match[3].split(',');
+    if (!fields[0] || fields.length < 32) continue;
+    const previousClose = Number(fields[2]);
+    const rawPrice = Number(fields[3]);
+    const price = rawPrice > 0 ? rawPrice : previousClose;
+    rows.push({
+      code: `${code}.${market}`,
+      name: fields[0],
+      change: calculateChange(price, previousClose),
+      price,
+      previousClose,
+      tradeTime: [fields[30], fields[31]].filter(Boolean).join(' ')
+    });
+  }
+  return rows;
+}
+
+module.exports = { normalizeCode, calculateChange, rowsFromTushare, rowsFromSina };

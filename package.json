@@ -1,6 +1,6 @@
 {
   "name": "ghost-ticker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A discreet, transparent A-share desktop ticker powered by Tushare.",
   "main": "src/main.cjs",
   "author": "Chris958",

@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('ghost', {
   getConfig: () => ipcRenderer.invoke('ghost:get-config'),
   saveConfig: (config) => ipcRenderer.invoke('ghost:save-config', config),
-  testToken: (token) => ipcRenderer.invoke('ghost:test-token', token),
+  testToken: (options) => ipcRenderer.invoke('ghost:test-token', options),
   hide: () => ipcRenderer.invoke('ghost:hide'),
   refresh: () => ipcRenderer.invoke('ghost:refresh'),
   resize: (size) => ipcRenderer.invoke('ghost:resize', size),

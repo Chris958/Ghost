@@ -26,7 +26,16 @@
             <input id="token" type="password" autocomplete="off" placeholder="仅保存在本机" />
             <button id="testToken" class="secondary">测试</button>
           </div>
-          <small id="tokenStatus">需要开通 Tushare 实时日线 rt_k 权限</small>
+          <small id="tokenStatus">默认使用 realtime_quote，无需购买 rt_k 权限</small>
+        </label>
+
+        <label class="field">
+          <span>行情数据模式</span>
+          <select id="dataSource">
+            <option value="realtime_quote">realtime_quote · 标准 Token（推荐）</option>
+            <option value="rt_k">rt_k · 付费实时日线</option>
+          </select>
+          <small>realtime_quote 对应 Tushare SDK 的实时快照模式</small>
         </label>
 
         <div class="field">
